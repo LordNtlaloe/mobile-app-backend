@@ -14,8 +14,9 @@ WORKDIR /app
 
 COPY --from=builder /app/package.json /app/yarn.lock ./
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/generated ./generated
-RUN yarn install --production --ignore-scripts
+
+RUN yarn install --production
+RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
 
