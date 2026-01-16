@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DashboardService = void 0;
 const prisma_1 = require("../lib/prisma");
-const prisma_2 = require("../generated/prisma");
+const prisma_2 = require("@prisma/client";);
 class DashboardService {
     async getRoleBasedDashboard(userId, role) {
         switch (role) {

@@ -1,6 +1,6 @@
 // services/dashboard-services.ts
 import { prisma } from "../lib/prisma";
-import { Role } from "../generated/prisma";
+import { Role } from "@prisma/client";;
 
 export interface DashboardMetrics {
     overview: {

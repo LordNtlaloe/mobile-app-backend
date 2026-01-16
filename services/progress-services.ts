@@ -1,6 +1,6 @@
 // services/progress-services.ts
 import { prisma } from "../lib/prisma";
-import { MealType } from "../generated/prisma";
+import { MealType } from "@prisma/client";;
 
 export interface MeasurementData {
     weight?: number;

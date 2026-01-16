@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { prisma } from "../lib/prisma";
 import { sendPasswordResetEmail, sendWelcomeEmail } from "../lib/mail";
-import { Department, Role } from "../generated/prisma";
+import { Department, Role } from "@prisma/client";;
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 

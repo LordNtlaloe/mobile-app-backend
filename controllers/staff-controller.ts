@@ -1,7 +1,7 @@
 // controllers/staff-controller.ts
 import { Request, Response } from "express";
 import { StaffService, StaffData } from "../services/staff-services";
-import { Department } from "../generated/prisma";
+import { Department } from "@prisma/client";;
 
 const staffService = new StaffService();
 

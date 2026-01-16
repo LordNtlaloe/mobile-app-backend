@@ -9,7 +9,7 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
 const prisma_1 = require("../lib/prisma");
 const mail_1 = require("../lib/mail");
-const prisma_2 = require("../generated/prisma");
+const prisma_2 = require("@prisma/client";);
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
     throw new Error("JWT_SECRET is not defined in environment variables");

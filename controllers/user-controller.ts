@@ -1,7 +1,7 @@
 // controllers/user-controller.ts
 import { Request, Response } from "express";
 import { UserService } from "../services/user-services";
-import { Role } from "../generated/prisma";
+import { Role } from "@prisma/client"
 
 const userService = new UserService();
 

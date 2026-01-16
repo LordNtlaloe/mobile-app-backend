@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserService = void 0;
 const prisma_1 = require("../lib/prisma");
-const prisma_2 = require("../generated/prisma");
+const prisma_2 = require("@prisma/client";);
 class UserService {
     async getAllUsers(role, verified) {
         const where = {};

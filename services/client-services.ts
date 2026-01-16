@@ -1,6 +1,6 @@
 // services/client-services.ts
 import { prisma } from "../lib/prisma";
-import { Gender } from "../generated/prisma";
+import { Gender } from "@prisma/client";;
 
 export interface ClientProfileData {
     firstName: string;

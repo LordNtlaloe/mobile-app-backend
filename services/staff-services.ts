@@ -1,6 +1,6 @@
 // services/staff-services.ts
 import { prisma } from "../lib/prisma";
-import { Department } from "../generated/prisma";
+import { Department } from "@prisma/client";;
 
 export interface StaffData {
     firstName: string;

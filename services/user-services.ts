@@ -1,6 +1,6 @@
 // services/user-services.ts
 import { prisma } from "../lib/prisma";
-import { Role } from "../generated/prisma";
+import { Role } from "@prisma/client";;
 
 export class UserService {
     async getAllUsers(role?: Role, verified?: boolean) {
