@@ -1,0 +1,296 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  CLIENT
+  TRAINER
+}
+
+enum Department {
+  ONLINE
+  CARDIO
+  WEIGHT
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  firstName    String?
+  lastName     String?
+  passwordHash String
+  role         Role     @default(CLIENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  isVerified   Boolean  @default(false)
+
+  // Authentication
+  refreshTokens    RefreshToken[]
+  verificationCode VerificationCode[]
+  passwordReset    PasswordReset[]
+
+  // Role-specific relationships
+  staffProfile  Staff?
+  clientProfile ClientProfile?
+
+  @@index([email])
+  @@index([role])
+  @@index([createdAt])
+}
+
+model RefreshToken {
+  id           String        @id @default(cuid())
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  tokenHash    String
+  revoked      Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  expiresAt    DateTime
+  replacedById String?
+  replacedBy   RefreshToken? @relation("Replacement", fields: [replacedById], references: [id])
+
+  replacements RefreshToken[] @relation("Replacement")
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  code      String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  used      Boolean  @default(false)
+
+  @@index([userId])
+  @@index([code])
+  @@index([expiresAt])
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+// Staff Management
+model Staff {
+  id             String          @id @default(cuid())
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String          @unique
+  firstName      String
+  lastName       String
+  department     Department      @default(CARDIO)
+  specialization String?
+  contactInfo    String
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  clientProfiles ClientProfile[]
+
+  @@index([firstName, lastName])
+  @@index([department])
+}
+
+// Client Profile with comprehensive tracking
+model ClientProfile {
+  id     String @id @default(cuid())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+
+  // Personal Details
+  firstName   String
+  lastName    String
+  phone       String?   @unique
+  address     String?
+  dateOfBirth DateTime?
+  gender      Gender?
+
+  // Emergency Contact
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+
+  // Lifestyle Information
+  occupation         String?
+  alcoholConsumption Boolean @default(false)
+  smokingStatus      Boolean @default(false)
+
+  // Fitness Information
+  targetWeight Float?
+
+  // Medical & Health Information (Normalized)
+  medicalConditions   MedicalCondition[]
+  allergies           Allergy[]
+  medications         Medication[]
+  injuries            Injury[]
+  fitnessGoals        FitnessGoal[]
+  dietaryRestrictions DietaryRestriction[]
+
+  // Progress Tracking
+  measurements  Measurement[]
+  nutritionLogs NutritionLog[]
+
+  // Trainer Assignment
+  assignedTrainerId String?
+  assignedTrainer   Staff?  @relation(fields: [assignedTrainerId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([firstName, lastName])
+  @@index([assignedTrainerId])
+}
+
+// Medical & Health Information Models
+model MedicalCondition {
+  id        String        @id @default(cuid())
+  client    ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String
+  condition String
+  diagnosed DateTime?
+  notes     String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([clientId])
+}
+
+model Allergy {
+  id        String        @id @default(cuid())
+  client    ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String
+  allergen  String
+  severity  String? // Mild, Moderate, Severe
+  reaction  String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([clientId])
+}
+
+model Medication {
+  id        String        @id @default(cuid())
+  client    ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String
+  name      String
+  dosage    String?
+  frequency String?
+  startDate DateTime?
+  endDate   DateTime?
+  notes     String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([clientId])
+}
+
+model Injury {
+  id           String        @id @default(cuid())
+  client       ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId     String
+  description  String
+  injuryDate   DateTime?
+  recoveryDate DateTime?
+  status       String? // Active, Recovering, Healed
+  notes        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([clientId])
+}
+
+model FitnessGoal {
+  id          String        @id @default(cuid())
+  client      ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId    String
+  goal        String
+  targetDate  DateTime?
+  achieved    Boolean       @default(false)
+  achievedAt  DateTime?
+  description String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([clientId])
+}
+
+model DietaryRestriction {
+  id          String        @id @default(cuid())
+  client      ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId    String
+  restriction String
+  reason      String? // Religious, Medical, Personal
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([clientId])
+}
+
+// Progress Tracking Models
+model Measurement {
+  id       String        @id @default(cuid())
+  client   ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  date      DateTime @default(now())
+  weight    Float?
+  chest     Float?
+  waist     Float?
+  hips      Float?
+  biceps    Float?
+  thighs    Float?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, date])
+}
+
+model NutritionLog {
+  id       String        @id @default(cuid())
+  client   ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String
+
+  date      DateTime @default(now())
+  mealType  MealType @default(BREAKFAST)
+  imageUrl  String
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId, date])
+}
