@@ -99,3 +99,21 @@ export const revokeUserRefreshTokens = async (req: Request, res: Response): Prom
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+// controllers/user-controller.ts (add this export)
+export const searchUsers = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { query } = req.query;
+
+        if (!query || typeof query !== 'string') {
+            res.status(400).json({ error: "Search query is required" });
+            return;
+        }
+
+        const users = await userService.searchUsers(query);
+        res.json(users);
+    } catch (error) {
+        console.error("Search users error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
