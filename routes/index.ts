@@ -8,6 +8,7 @@ import measurementRoutes from './measurements-routes';
 import medicalRoutes from './medical-routes';
 import nutritionRoutes from './nutrition-routes';
 import adminRoutes from './dashboard-routes';
+import streamRoutes from "./stream-routes"
 
 const router = express.Router();
 
@@ -21,5 +22,6 @@ router.use('/medical', medicalRoutes);
 router.use('/nutrition', nutritionRoutes);
 router.use('/admin', adminRoutes);
 router.use('/admin/users', userRoutes);
+router.use('/stream', streamRoutes)
 
 export default router;
