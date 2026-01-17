@@ -1,25 +1,34 @@
 // routes/dashboard-routes.ts
-import express from 'express';
-import * as dashboardController from '../controllers/dashboard-controller';
-import { authenticate, authorize } from '../middleware/auth';
+import { Router } from "express";
+import { 
+  getDashboardStats,
+  getClientAnalytics,
+  getTrainerAnalytics,
+  exportDashboardData,
+  getDashboardWidgets,
+  getTimeSeriesData,
+} from "../controllers/dashboard-controller";
+import { authenticate } from "../middleware/auth";
 
-const router = express.Router();
+const router = Router();
 
 // All dashboard routes require authentication
 router.use(authenticate);
 
-// Main dashboard endpoint - automatically serves role-based dashboard
-router.get('/', dashboardController.getDashboard);
+// Main dashboard stats
+router.get("/stats", getDashboardStats);
 
-// Role-specific dashboard endpoints
-router.get('/admin', authorize('ADMIN'), dashboardController.getAdminDashboard);
-router.get('/trainer', authorize('ADMIN', 'TRAINER'), dashboardController.getTrainerDashboard);
-router.get('/client', authorize('ADMIN', 'CLIENT'), dashboardController.getClientDashboard);
+// Analytics for specific entities
+router.get("/client/:clientId", getClientAnalytics);
+router.get("/trainer/:trainerId", getTrainerAnalytics);
 
-// Quick stats endpoint
-router.get('/quick-stats', dashboardController.getQuickStats);
+// Export functionality
+router.get("/export", exportDashboardData);
 
-// Recent activity feed
-router.get('/recent-activity', dashboardController.getRecentActivity);
+// Widget-based data (for modular dashboard)
+router.get("/widgets", getDashboardWidgets);
+
+// Time series data for charts
+router.get("/timeseries", getTimeSeriesData);
 
 export default router;

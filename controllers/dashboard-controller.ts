@@ -1,530 +1,274 @@
 // controllers/dashboard-controller.ts
 import { Response } from "express";
-import { DashboardService } from "../services/dashboard-services";
 import { AuthRequest } from "../middleware/auth";
-import { prisma } from "../lib/prisma";
+import { DashboardService, DashboardStats } from "../services/dashboard-services";
 
 const dashboardService = new DashboardService();
 
-export const getDashboard = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getDashboardStats = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        if (!req.user) {
-            res.status(401).json({ error: "Unauthorized" });
+        if (req.user?.role !== 'ADMIN') {
+            res.status(403).json({ error: "Access denied. Admin only." });
             return;
         }
 
-        const { userId, role } = req.user;
+        const timeframe = (req.query.timeframe as 'daily' | 'weekly' | 'monthly' | 'yearly') || 'monthly';
+        const stats = await dashboardService.getDashboardStats(timeframe);
 
-        const dashboard = await dashboardService.getRoleBasedDashboard(userId, role as any);
-
-        res.json({
-            success: true,
-            data: dashboard,
-            role
-        });
+        res.json(stats);
     } catch (error: any) {
-        console.error("Get dashboard error:", error);
-        res.status(500).json({
-            success: false,
-            error: error.message || "Internal server error"
-        });
+        console.error("Get dashboard stats error:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 };
 
-export const getAdminDashboard = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getClientAnalytics = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        if (!req.user || req.user.role !== 'ADMIN') {
-            res.status(403).json({ error: "Admin access required" });
+        if (req.user?.role !== 'ADMIN') {
+            res.status(403).json({ error: "Access denied. Admin only." });
             return;
         }
 
-        const dashboard = await dashboardService.getAdminDashboard();
+        const { clientId } = req.params;
+        if (!clientId) {
+            res.status(400).json({ error: "Client ID is required" });
+            return;
+        }
 
-        res.json({
-            success: true,
-            data: dashboard,
-            timestamp: new Date().toISOString()
-        });
+        const analytics = await dashboardService.getClientAnalytics(clientId as string);
+        res.json(analytics);
     } catch (error: any) {
-        console.error("Get admin dashboard error:", error);
-        res.status(500).json({
-            success: false,
-            error: error.message || "Internal server error"
-        });
+        console.error("Get client analytics error:", error);
+
+        if (error.message.includes("not found")) {
+            res.status(404).json({ error: error.message });
+            return;
+        }
+
+        res.status(500).json({ error: "Internal server error" });
     }
 };
 
-export const getTrainerDashboard = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getTrainerAnalytics = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        if (!req.user || (req.user.role !== 'TRAINER' && req.user.role !== 'ADMIN')) {
-            res.status(403).json({ error: "Trainer access required" });
+        if (req.user?.role !== 'ADMIN') {
+            res.status(403).json({ error: "Access denied. Admin only." });
             return;
         }
 
-        const dashboard = await dashboardService.getTrainerDashboard(req.user.userId);
+        const { trainerId } = req.params;
+        if (!trainerId) {
+            res.status(400).json({ error: "Trainer ID is required" });
+            return;
+        }
 
-        res.json({
-            success: true,
-            data: dashboard,
-            timestamp: new Date().toISOString()
-        });
+        const analytics = await dashboardService.getTrainerAnalytics(trainerId as string);
+        res.json(analytics);
     } catch (error: any) {
-        console.error("Get trainer dashboard error:", error);
-        res.status(500).json({
-            success: false,
-            error: error.message || "Internal server error"
-        });
+        console.error("Get trainer analytics error:", error);
+
+        if (error.message.includes("not found")) {
+            res.status(404).json({ error: error.message });
+            return;
+        }
+
+        res.status(500).json({ error: "Internal server error" });
     }
 };
 
-export const getClientDashboard = async (req: AuthRequest, res: Response): Promise<void> => {
+export const exportDashboardData = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        if (!req.user || (req.user.role !== 'CLIENT' && req.user.role !== 'ADMIN')) {
-            res.status(403).json({ error: "Client access required" });
+        if (req.user?.role !== 'ADMIN') {
+            res.status(403).json({ error: "Access denied. Admin only." });
             return;
         }
 
-        const dashboard = await dashboardService.getClientDashboard(req.user.userId);
+        const format = req.query.format as 'csv' | 'json' | 'pdf' || 'json';
+        const timeframe = req.query.timeframe as string || 'monthly';
 
-        res.json({
-            success: true,
-            data: dashboard,
-            timestamp: new Date().toISOString()
-        });
-    } catch (error: any) {
-        console.error("Get client dashboard error:", error);
-        res.status(500).json({
-            success: false,
-            error: error.message || "Internal server error"
-        });
-    }
-};
+        const stats = await dashboardService.getDashboardStats(timeframe as any);
 
-// Additional dashboard endpoints
-export const getQuickStats = async (req: AuthRequest, res: Response): Promise<void> => {
-    try {
-        if (!req.user) {
-            res.status(401).json({ error: "Unauthorized" });
-            return;
-        }
-
-        const { userId, role } = req.user;
-        let stats: any = {};
-
-        switch (role) {
-            case 'ADMIN':
-                stats = await getAdminQuickStats();
+        switch (format) {
+            case 'csv':
+                const csvData = convertToCSV(stats);
+                res.setHeader('Content-Type', 'text/csv');
+                res.setHeader('Content-Disposition', 'attachment; filename="dashboard-stats.csv"');
+                res.send(csvData);
                 break;
-            case 'TRAINER':
-                stats = await getTrainerQuickStats(userId);
+
+            case 'pdf':
+                res.status(501).json({ error: "PDF export not yet implemented" });
                 break;
-            case 'CLIENT':
-                stats = await getClientQuickStats(userId);
+
+            case 'json':
+            default:
+                res.json(stats);
+                break;
+        }
+    } catch (error: any) {
+        console.error("Export dashboard data error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+function convertToCSV(stats: DashboardStats): string {
+    const rows: string[] = [];
+
+    rows.push('Category,Statistic,Value');
+    rows.push(`Overview,Total Users,${stats.overview.totalUsers}`);
+    rows.push(`Overview,Total Clients,${stats.overview.totalClients}`);
+    rows.push(`Overview,Total Staff,${stats.overview.totalStaff}`);
+    rows.push(`Overview,Active Users,${stats.overview.activeUsers}`);
+    rows.push(`Overview,New Users This Month,${stats.overview.newUsersThisMonth}`);
+    rows.push(`Overview,User Growth Rate,${stats.overview.userGrowthRate.toFixed(2)}%`);
+
+    rows.push(`Users,Clients,${stats.users.byRole.client}`);
+    rows.push(`Users,Trainers,${stats.users.byRole.trainer}`);
+    rows.push(`Users,Admins,${stats.users.byRole.admin}`);
+    rows.push(`Users,Verified,${stats.users.byVerification.verified}`);
+    rows.push(`Users,Unverified,${stats.users.byVerification.unverified}`);
+
+    rows.push(`Clients,Total,${stats.clients.totalClients}`);
+    rows.push(`Clients,With Trainers,${stats.clients.clientsWithTrainers}`);
+    rows.push(`Clients,Avg Target Weight,${stats.clients.avgTargetWeight.toFixed(2)}`);
+    rows.push(`Clients,Smokers,${stats.clients.lifestyle.smokers}`);
+    rows.push(`Clients,Alcohol Consumers,${stats.clients.lifestyle.alcoholConsumers}`);
+
+    rows.push(`Staff,Total,${stats.staff.totalStaff}`);
+    rows.push(`Staff,Active Trainers,${stats.staff.activeTrainers}`);
+    rows.push(`Staff,Avg Clients Per Trainer,${stats.staff.avgClientsPerTrainer.toFixed(2)}`);
+
+    rows.push(`Health,Medical Conditions,${stats.healthMetrics.medicalConditions.total}`);
+    rows.push(`Health,Allergies,${stats.healthMetrics.allergies.total}`);
+    rows.push(`Health,Medications,${stats.healthMetrics.medications.total}`);
+    rows.push(`Health,Injuries,${stats.healthMetrics.injuries.total}`);
+    rows.push(`Health,Active Injuries,${stats.healthMetrics.injuries.active}`);
+
+    rows.push(`Engagement,Avg Nutrition Logs,${stats.engagement.avgNutritionLogs.toFixed(2)}`);
+    rows.push(`Engagement,Clients With Goals,${stats.engagement.clientsWithGoals}`);
+    rows.push(`Engagement,Goals Achieved,${stats.engagement.goalsAchieved}`);
+    rows.push(`Engagement,Goal Completion Rate,${stats.engagement.goalCompletionRate.toFixed(2)}%`);
+    rows.push(`Engagement,Active Clients,${stats.engagement.activeClients}`);
+    rows.push(`Engagement,Retention Rate,${stats.engagement.retentionRate.toFixed(2)}%`);
+
+    return rows.join('\n');
+}
+
+export const getDashboardWidgets = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        if (req.user?.role !== 'ADMIN') {
+            res.status(403).json({ error: "Access denied. Admin only." });
+            return;
+        }
+
+        const widgets = req.query.widgets as string;
+        const widgetList = widgets ? widgets.split(',') : ['overview', 'kpis', 'recent', 'charts'];
+
+        const results: any = {};
+
+        if (widgetList.includes('overview')) {
+            const overview = await dashboardService.getOverviewStats('monthly');
+            results.overview = overview;
+        }
+
+        if (widgetList.includes('kpis')) {
+            const kpis = await dashboardService.getKPIs();
+            results.kpis = kpis;
+        }
+
+        if (widgetList.includes('recent')) {
+            const recent = await dashboardService.getRecentActivities(5);
+            results.recent = recent;
+        }
+
+        if (widgetList.includes('topPerformers')) {
+            const top = await dashboardService.getTopPerformingStats();
+            results.topPerformers = top;
+        }
+
+        res.json(results);
+    } catch (error: any) {
+        console.error("Get dashboard widgets error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const getTimeSeriesData = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        if (req.user?.role !== 'ADMIN') {
+            res.status(403).json({ error: "Access denied. Admin only." });
+            return;
+        }
+
+        const metric = req.query.metric as string;
+        const timeframe = req.query.timeframe as string;
+
+        const validMetrics = ['users', 'clients', 'measurements', 'nutrition'];
+        const validTimeframes = ['daily', 'weekly', 'monthly', 'yearly'];
+
+        if (!metric || !validMetrics.includes(metric)) {
+            res.status(400).json({
+                error: "Valid metric required",
+                validMetrics
+            });
+            return;
+        }
+
+        const selectedTimeframe = timeframe || 'monthly';
+        if (!validTimeframes.includes(selectedTimeframe)) {
+            res.status(400).json({
+                error: "Valid timeframe required",
+                validTimeframes
+            });
+            return;
+        }
+
+        let data;
+        switch (metric) {
+            case 'users':
+                data = await dashboardService.getUserGrowthData(selectedTimeframe);
+                break;
+            case 'clients':
+                data = await dashboardService.getClientEnrollmentData(selectedTimeframe);
                 break;
             default:
-                res.status(400).json({ error: "Invalid role" });
-                return;
+                data = await dashboardService.getUserGrowthData(selectedTimeframe);
         }
 
         res.json({
-            success: true,
-            data: stats
+            metric,
+            timeframe: selectedTimeframe,
+            data
         });
     } catch (error: any) {
-        console.error("Get quick stats error:", error);
-        res.status(500).json({
-            success: false,
-            error: error.message || "Internal server error"
-        });
+        console.error("Get time series data error:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 };
 
-export const getRecentActivity = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getFilteredDashboardStats = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        if (!req.user) {
-            res.status(401).json({ error: "Unauthorized" });
+        if (req.user?.role !== 'ADMIN') {
+            res.status(403).json({ error: "Access denied. Admin only." });
             return;
         }
 
-        const { userId, role } = req.user;
-        let activity: any[] = [];
+        const filters = {
+            timeframe: req.query.timeframe as string || 'monthly',
+            startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+            endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+            departments: req.query.departments ? (req.query.departments as string).split(',') : undefined,
+            gender: req.query.gender ? (req.query.gender as string).split(',') : undefined
+        };
 
-        switch (role) {
-            case 'ADMIN':
-                activity = await getAdminRecentActivity();
-                break;
-            case 'TRAINER':
-                activity = await getTrainerRecentActivity(userId);
-                break;
-            case 'CLIENT':
-                activity = await getClientRecentActivity(userId);
-                break;
-        }
+        const stats = await dashboardService.getDashboardStats(filters.timeframe as any);
 
         res.json({
-            success: true,
-            data: activity
+            ...stats,
+            filtersApplied: filters
         });
     } catch (error: any) {
-        console.error("Get recent activity error:", error);
-        res.status(500).json({
-            success: false,
-            error: error.message || "Internal server error"
-        });
+        console.error("Get filtered dashboard stats error:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 };
-
-// Helper functions for quick stats
-async function getAdminQuickStats() {
-    const [
-        totalUsers,
-        newUsersToday,
-        totalMeasurements,
-        totalNutritionLogs
-    ] = await Promise.all([
-        prisma.user.count(),
-        prisma.user.count({
-            where: {
-                createdAt: {
-                    gte: new Date(new Date().setHours(0, 0, 0, 0))
-                }
-            }
-        }),
-        prisma.measurement.count(),
-        prisma.nutritionLog.count()
-    ]);
-
-    return {
-        totalUsers,
-        newUsersToday,
-        totalMeasurements,
-        totalNutritionLogs,
-        activeTrainers: await prisma.staff.count({ where: { isActive: true } })
-    };
-}
-
-async function getTrainerQuickStats(trainerUserId: string) {
-    const trainer = await prisma.staff.findUnique({
-        where: { userId: trainerUserId }
-    });
-
-    if (!trainer) return {};
-
-    const [
-        totalClients,
-        activeClients,
-        recentMeasurements,
-        upcomingGoals
-    ] = await Promise.all([
-        prisma.clientProfile.count({ where: { assignedTrainerId: trainer.id } }),
-        prisma.clientProfile.count({
-            where: {
-                assignedTrainerId: trainer.id,
-                measurements: {
-                    some: {
-                        date: {
-                            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-                        }
-                    }
-                }
-            }
-        }),
-        prisma.measurement.count({
-            where: {
-                client: {
-                    assignedTrainerId: trainer.id
-                },
-                date: {
-                    gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-                }
-            }
-        }),
-        prisma.fitnessGoal.count({
-            where: {
-                client: {
-                    assignedTrainerId: trainer.id
-                },
-                achieved: false,
-                targetDate: {
-                    lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-                }
-            }
-        })
-    ]);
-
-    return {
-        totalClients,
-        activeClients,
-        recentMeasurements,
-        upcomingGoals,
-        clientSatisfaction: 85 // Placeholder
-    };
-}
-
-async function getClientQuickStats(clientUserId: string) {
-    const clientProfile = await prisma.clientProfile.findUnique({
-        where: { userId: clientUserId }
-    });
-
-    if (!clientProfile) return {};
-
-    const [
-        totalMeasurements,
-        recentMeasurements,
-        totalNutritionLogs,
-        upcomingGoals
-    ] = await Promise.all([
-        prisma.measurement.count({ where: { clientId: clientProfile.id } }),
-        prisma.measurement.count({
-            where: {
-                clientId: clientProfile.id,
-                date: {
-                    gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-                }
-            }
-        }),
-        prisma.nutritionLog.count({ where: { clientId: clientProfile.id } }),
-        prisma.fitnessGoal.count({
-            where: {
-                clientId: clientProfile.id,
-                achieved: false,
-                targetDate: {
-                    lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-                }
-            }
-        })
-    ]);
-
-    const latestMeasurement = await prisma.measurement.findFirst({
-        where: { clientId: clientProfile.id },
-        orderBy: { date: 'desc' }
-    });
-
-    return {
-        totalMeasurements,
-        recentMeasurements,
-        totalNutritionLogs,
-        upcomingGoals,
-        latestWeight: latestMeasurement?.weight,
-        hasTrainer: !!clientProfile.assignedTrainerId
-    };
-}
-
-// Helper functions for recent activity
-async function getAdminRecentActivity() {
-    const [
-        recentUsers,
-        recentMeasurements,
-        recentLogs
-    ] = await Promise.all([
-        prisma.user.findMany({
-            orderBy: { createdAt: 'desc' },
-            take: 5,
-            select: {
-                id: true,
-                email: true,
-                firstName: true,
-                lastName: true,
-                role: true,
-                createdAt: true
-            }
-        }),
-        prisma.measurement.findMany({
-            orderBy: { createdAt: 'desc' },
-            take: 5,
-            include: {
-                client: {
-                    select: {
-                        firstName: true,
-                        lastName: true
-                    }
-                }
-            }
-        }),
-        prisma.nutritionLog.findMany({
-            orderBy: { createdAt: 'desc' },
-            take: 5,
-            include: {
-                client: {
-                    select: {
-                        firstName: true,
-                        lastName: true
-                    }
-                }
-            }
-        })
-    ]);
-
-    return [
-        ...recentUsers.map(user => ({
-            type: 'USER_REGISTERED',
-            user: `${user.firstName} ${user.lastName}`,
-            role: user.role,
-            timestamp: user.createdAt
-        })),
-        ...recentMeasurements.map(measurement => ({
-            type: 'MEASUREMENT_ADDED',
-            client: `${measurement.client.firstName} ${measurement.client.lastName}`,
-            weight: measurement.weight,
-            timestamp: measurement.createdAt
-        })),
-        ...recentLogs.map(log => ({
-            type: 'NUTRITION_LOG_ADDED',
-            client: `${log.client.firstName} ${log.client.lastName}`,
-            mealType: log.mealType,
-            timestamp: log.createdAt
-        }))
-    ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, 10);
-}
-
-async function getTrainerRecentActivity(trainerUserId: string) {
-    const trainer = await prisma.staff.findUnique({
-        where: { userId: trainerUserId }
-    });
-
-    if (!trainer) return [];
-
-    const [
-        clientMeasurements,
-        clientLogs,
-        goalUpdates
-    ] = await Promise.all([
-        prisma.measurement.findMany({
-            where: {
-                client: {
-                    assignedTrainerId: trainer.id
-                }
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 10,
-            include: {
-                client: {
-                    select: {
-                        firstName: true,
-                        lastName: true
-                    }
-                }
-            }
-        }),
-        prisma.nutritionLog.findMany({
-            where: {
-                client: {
-                    assignedTrainerId: trainer.id
-                }
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 10,
-            include: {
-                client: {
-                    select: {
-                        firstName: true,
-                        lastName: true
-                    }
-                }
-            }
-        }),
-        prisma.fitnessGoal.findMany({
-            where: {
-                client: {
-                    assignedTrainerId: trainer.id
-                },
-                updatedAt: {
-                    gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-                }
-            },
-            orderBy: { updatedAt: 'desc' },
-            take: 10,
-            include: {
-                client: {
-                    select: {
-                        firstName: true,
-                        lastName: true
-                    }
-                }
-            }
-        })
-    ]);
-
-    return [
-        ...clientMeasurements.map(m => ({
-            type: 'CLIENT_MEASUREMENT',
-            client: `${m.client.firstName} ${m.client.lastName}`,
-            action: 'added measurement',
-            weight: m.weight,
-            timestamp: m.createdAt
-        })),
-        ...clientLogs.map(l => ({
-            type: 'CLIENT_NUTRITION_LOG',
-            client: `${l.client.firstName} ${l.client.lastName}`,
-            action: 'logged meal',
-            mealType: l.mealType,
-            timestamp: l.createdAt
-        })),
-        ...goalUpdates.map(g => ({
-            type: 'GOAL_UPDATE',
-            client: `${g.client.firstName} ${g.client.lastName}`,
-            action: g.achieved ? 'achieved goal' : 'updated goal',
-            goal: g.goal,
-            timestamp: g.updatedAt
-        }))
-    ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, 15);
-}
-
-async function getClientRecentActivity(clientUserId: string) {
-    const clientProfile = await prisma.clientProfile.findUnique({
-        where: { userId: clientUserId }
-    });
-
-    if (!clientProfile) return [];
-
-    const [
-        measurements,
-        nutritionLogs,
-        goalUpdates
-    ] = await Promise.all([
-        prisma.measurement.findMany({
-            where: { clientId: clientProfile.id },
-            orderBy: { createdAt: 'desc' },
-            take: 10
-        }),
-        prisma.nutritionLog.findMany({
-            where: { clientId: clientProfile.id },
-            orderBy: { createdAt: 'desc' },
-            take: 10
-        }),
-        prisma.fitnessGoal.findMany({
-            where: {
-                clientId: clientProfile.id,
-                updatedAt: {
-                    gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-                }
-            },
-            orderBy: { updatedAt: 'desc' },
-            take: 10
-        })
-    ]);
-
-    return [
-        ...measurements.map(m => ({
-            type: 'MEASUREMENT',
-            action: 'Recorded measurements',
-            details: `Weight: ${m.weight || 'N/A'}kg`,
-            timestamp: m.createdAt
-        })),
-        ...nutritionLogs.map(l => ({
-            type: 'NUTRITION',
-            action: `Logged ${l.mealType.toLowerCase()} meal`,
-            details: l.notes || 'No notes',
-            timestamp: l.createdAt
-        })),
-        ...goalUpdates.map(g => ({
-            type: 'GOAL',
-            action: g.achieved ? 'Achieved goal' : 'Updated goal',
-            details: g.goal,
-            timestamp: g.updatedAt
-        }))
-    ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, 10);
-}
