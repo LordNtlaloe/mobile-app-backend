@@ -7,6 +7,7 @@ import {
   exportDashboardData,
   getDashboardWidgets,
   getTimeSeriesData,
+  getFilteredDashboardStats
 } from "../controllers/dashboard-controller";
 import { authenticate } from "../middleware/auth";
 
@@ -17,6 +18,7 @@ router.use(authenticate);
 
 // Main dashboard stats
 router.get("/stats", getDashboardStats);
+router.get("/stats/filtered", getFilteredDashboardStats);
 
 // Analytics for specific entities
 router.get("/client/:clientId", getClientAnalytics);
